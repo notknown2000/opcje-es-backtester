@@ -1,0 +1,50 @@
+services:
+  # Twój warsztat Pythona
+  analytics:
+    build: .
+    container_name: es-analytics
+    volumes:
+      - .:/app
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    tty: true
+    command: bash
+
+  dashboard:
+    build: .
+    container_name: es-dashboard
+    volumes:
+      - .:/app
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8501:8501"
+    command: streamlit run taleb_kurtosis/dashboard.py --server.address 0.0.0.0 --server.port 8501
+
+  spx-monitor:
+    build: .
+    container_name: spx-tail-monitor
+    volumes:
+      - .:/app:ro
+    working_dir: /app
+    ports:
+      - "127.0.0.1:${SPX_MONITOR_PORT:-8502}:8502"
+    command: streamlit run taleb_kurtosis/spx_monitor_dashboard.py --server.address 0.0.0.0 --server.port 8502 --browser.gatherUsageStats false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8502/_stcore/health', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+
+  # Lekka baza danych na dane historyczne
+  db:
+    image: mariadb:10.11
+    container_name: es-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
+      MYSQL_DATABASE: trading_db
+    volumes:
+      - ./db-data:/var/lib/mysql
